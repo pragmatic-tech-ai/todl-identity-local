@@ -46,10 +46,18 @@ export class EncryptedSecretStore implements ISecretStore
             const raw = Buffer.from(blob, EncryptedSecretStore.BlobEncoding);
             const tagStart = EncryptedSecretStore.IvLength;
             const dataStart = tagStart + EncryptedSecretStore.TagLength;
+            if (raw.length < dataStart)
+            {
+                return null;
+            }
             const iv = raw.subarray(0, tagStart);
             const tag = raw.subarray(tagStart, dataStart);
             const ciphertext = raw.subarray(dataStart);
-            const decipher = createDecipheriv(EncryptedSecretStore.Algorithm, this.masterKey, iv);
+            const decipher = createDecipheriv(
+                EncryptedSecretStore.Algorithm,
+                this.masterKey,
+                iv,
+                { authTagLength: EncryptedSecretStore.TagLength });
             decipher.setAuthTag(tag);
             return Buffer.concat([decipher.update(ciphertext), decipher.final()])
                 .toString(EncryptedSecretStore.PlaintextEncoding);

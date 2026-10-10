@@ -58,3 +58,16 @@ test("a blob written under a different key reads as null", async () =>
     await new EncryptedSecretStore(randomBytes(32), entries).Put("k", "v");
     assert.equal(await new EncryptedSecretStore(randomBytes(32), entries).Get("k"), null);
 });
+
+test("structurally truncated blobs read as null", async () =>
+{
+    const entries = new Map<string, string>();
+    const store = new EncryptedSecretStore(randomBytes(32), entries);
+    await store.Put("k", "v");
+    entries.set("k", randomBytes(12).toString("base64url"));
+    assert.equal(await store.Get("k"), null);
+    entries.set("k", Buffer.concat([randomBytes(12), randomBytes(4)]).toString("base64url"));
+    assert.equal(await store.Get("k"), null);
+    entries.set("k", "");
+    assert.equal(await store.Get("k"), null);
+});
