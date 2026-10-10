@@ -5,3 +5,4 @@
 export { Argon2PasswordHasher } from "./hashing/argon2-password-hasher.js";
 export { EncryptedSecretStore } from "./secrets/encrypted-secret-store.js";
 export { LocalAccountStore } from "./accounts/local-account-store.js";
+export { LocalSessionManager } from "./sessions/local-session-manager.js";
