@@ -50,3 +50,24 @@ test("resolve under the wrong tenant returns null", async () =>
     const other = new Tenant("t2", TenantKind.Saas, "Globex");
     assert.equal(await store.Resolve(other, new PresentedSecret(Token)), null);
 });
+
+test("token is expired at exactly its expiry instant but valid one ms before", async () =>
+{
+    const t0 = 1_000_000;
+    let t = t0;
+    const store = new ServiceTokenStore(() => new Date(t));
+    const { Token } = await store.Issue(tenant, "svc1", ["read:models"], new Date(t0 + 1000));
+    t = t0 + 999;
+    assert.notEqual(await store.Resolve(tenant, new PresentedSecret(Token)), null);
+    t = t0 + 1000;
+    assert.equal(await store.Resolve(tenant, new PresentedSecret(Token)), null);
+});
+
+test("a different tenant cannot revoke another tenant's token by ref", async () =>
+{
+    const store = new ServiceTokenStore();
+    const { Grant, Token } = await store.Issue(tenant, "svc1", ["read:models"], null);
+    const other = new Tenant("t2", TenantKind.Saas, "Globex");
+    await store.Revoke(other, Grant.TokenRef);
+    assert.notEqual(await store.Resolve(tenant, new PresentedSecret(Token)), null);
+});
