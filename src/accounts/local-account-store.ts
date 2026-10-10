@@ -4,6 +4,8 @@ import type { ILocalAccountStore, IPrincipalDirectory, Tenant } from "@pragmatic
 export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirectory
 {
     private static readonly DuplicateEmailMessage = "email already registered";
+    private static readonly DuplicatePrincipalMessage = "principal already registered";
+    private static readonly InvalidKeyComponentMessage = "tenant id and principal id must not contain the key separator";
     private static readonly KeySeparator = "/";
 
     private readonly byEmail = new Map<string, LocalAccount>();
@@ -12,14 +14,23 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
 
     public async CreateAccount(tenant: Tenant, email: string, principalId: string, secretRef: string): Promise<LocalAccount>
     {
+        if (tenant.Id.includes(LocalAccountStore.KeySeparator) || principalId.includes(LocalAccountStore.KeySeparator))
+        {
+            throw new Error(LocalAccountStore.InvalidKeyComponentMessage);
+        }
         const emailKey = LocalAccountStore.Key(tenant.Id, email);
+        const principalKey = LocalAccountStore.Key(tenant.Id, principalId);
         if (this.byEmail.has(emailKey))
         {
             throw new Error(LocalAccountStore.DuplicateEmailMessage);
         }
+        if (this.byPrincipal.has(principalKey))
+        {
+            throw new Error(LocalAccountStore.DuplicatePrincipalMessage);
+        }
         const account = new LocalAccount(principalId, tenant.Id, email, secretRef);
         this.byEmail.set(emailKey, account);
-        this.byPrincipal.set(LocalAccountStore.Key(tenant.Id, principalId), account);
+        this.byPrincipal.set(principalKey, account);
         return account;
     }
 

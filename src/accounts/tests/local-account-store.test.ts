@@ -30,6 +30,25 @@ test("same email in a different tenant is allowed (tenant isolation)", async () 
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");
     await store.CreateAccount(t2, "a@x.io", "p9", "r9");
     assert.equal((await store.FindByPrincipalId(t2, "p9"))?.Email, "a@x.io");
+    assert.equal((await store.FindByPrincipalId(t1, "p1"))?.PrincipalId, "p1");
+    assert.equal((await store.FindByEmail(t1, "a@x.io"))?.PrincipalId, "p1");
+    assert.equal((await store.FindByEmail(t2, "a@x.io"))?.PrincipalId, "p9");
+});
+
+test("duplicate principal id in the same tenant throws and leaves maps untouched", async () =>
+{
+    const store = new LocalAccountStore();
+    await store.CreateAccount(t1, "a@x.io", "p1", "r1");
+    await assert.rejects(() => store.CreateAccount(t1, "b@x.io", "p1", "r2"));
+    assert.equal(await store.FindByEmail(t1, "b@x.io"), null);
+    assert.equal((await store.FindByPrincipalId(t1, "p1"))?.Email, "a@x.io");
+});
+
+test("separator in tenant id or principal id is rejected", async () =>
+{
+    const store = new LocalAccountStore();
+    await assert.rejects(() => store.CreateAccount(new Tenant("a/b", TenantKind.Saas, "X"), "e@x.io", "c", "r"));
+    await assert.rejects(() => store.CreateAccount(t1, "e@x.io", "b/c", "r"));
 });
 
 test("absent lookups return null", async () =>
