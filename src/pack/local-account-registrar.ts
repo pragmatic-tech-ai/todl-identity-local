@@ -22,7 +22,16 @@ export class LocalAccountRegistrar
         const hash = await this.hasher.Hash(password.Reveal());
         const ref = tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
         await this.secrets.Put(ref, hash);
-        const account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
+        let account: LocalAccount;
+        try
+        {
+            account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
+        }
+        catch (error)
+        {
+            await this.secrets.Delete(ref);
+            throw error;
+        }
         const detail = new Map<string, string>([
             [LocalAccountRegistrar.ActionKey, LocalAccountRegistrar.RegisterAction],
             [LocalAccountRegistrar.EmailKey, email]
