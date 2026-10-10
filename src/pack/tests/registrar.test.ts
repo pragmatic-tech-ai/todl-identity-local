@@ -22,3 +22,22 @@ test("a failed registration leaves no orphaned secret and no audit event", async
     assert.notEqual(await secrets.Get("t1/pwhash/p1"), null);
     assert.equal(audit.Events.length, 1);
 });
+
+test("re-registering an existing principalId rejects and leaves the victim credential intact", async () =>
+{
+    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const secrets = new EncryptedSecretStore(randomBytes(32));
+    const hasher = new Argon2PasswordHasher();
+    const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, new InMemoryAuditSink());
+
+    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw1"));
+    const before = await secrets.Get("t1/pwhash/p1");
+    assert.ok(before !== null && await hasher.Verify("pw1", before));
+
+    await assert.rejects(registrar.Register(tenant, "attacker@x.io", "p1", new PresentedSecret("pw2")));
+
+    const after = await secrets.Get("t1/pwhash/p1");
+    assert.ok(after !== null);
+    assert.ok(await hasher.Verify("pw1", after));
+    assert.ok(!await hasher.Verify("pw2", after));
+});

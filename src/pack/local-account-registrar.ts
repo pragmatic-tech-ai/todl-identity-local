@@ -21,17 +21,10 @@ export class LocalAccountRegistrar
     {
         const hash = await this.hasher.Hash(password.Reveal());
         const ref = tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
+        // Reserve uniqueness first: a duplicate email/principal throws here, before any secret write,
+        // so an existing account's stored hash is never overwritten or deleted.
+        const account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
         await this.secrets.Put(ref, hash);
-        let account: LocalAccount;
-        try
-        {
-            account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
-        }
-        catch (error)
-        {
-            await this.secrets.Delete(ref);
-            throw error;
-        }
         const detail = new Map<string, string>([
             [LocalAccountRegistrar.ActionKey, LocalAccountRegistrar.RegisterAction],
             [LocalAccountRegistrar.EmailKey, email]

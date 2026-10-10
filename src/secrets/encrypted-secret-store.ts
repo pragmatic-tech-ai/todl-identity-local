@@ -19,7 +19,12 @@ export class EncryptedSecretStore implements ISecretStore
     private readonly masterKey: Buffer;
     private readonly entries: Map<string, string>;
 
-    public constructor(masterKey: Buffer, entries: Map<string, string> = new Map<string, string>())
+    /**
+     * @param masterKey 32-byte AES key.
+     * @param entries Pluggable backing store: a host may supply a persistent map. It holds
+     * ciphertext only, never plaintext or the key.
+     */
+    public constructor(masterKey: Buffer,entries: Map<string, string> = new Map<string, string>())
     {
         if (masterKey.length !== EncryptedSecretStore.KeyLength)
         {
