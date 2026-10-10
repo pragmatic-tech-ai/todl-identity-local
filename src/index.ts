@@ -8,3 +8,4 @@ export { LocalAccountStore } from "./accounts/local-account-store.js";
 export { LocalSessionManager } from "./sessions/local-session-manager.js";
 export { ServiceTokenStore } from "./tokens/service-token-store.js";
 export { ServiceTokenAuthenticator } from "./tokens/service-token-authenticator.js";
+export { LocalPasswordAuthenticator } from "./authn/local-password-authenticator.js";
