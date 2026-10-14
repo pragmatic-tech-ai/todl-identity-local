@@ -21,7 +21,7 @@ export class LocalAccountRegistrar
     public async Register(tenant: Tenant, email: string, principalId: string, password: PresentedSecret): Promise<LocalAccount>
     {
         const hash = await this.hasher.Hash(password.Reveal());
-        const ref = tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
+        const ref = LocalAccountRegistrar.RefFor(tenant, principalId);
         // Reserve uniqueness first: a duplicate email/principal throws here, before any secret write,
         // so an existing account's stored hash is never overwritten or deleted.
         const account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
@@ -38,11 +38,13 @@ export class LocalAccountRegistrar
      * Re-hashes and overwrites an existing account's stored password hash iff the presented password no
      * longer verifies against it (i.e. it was rotated). Returns true when the hash was rewritten.
      * Fail-safe: a principal with no stored hash is left untouched (never mints a credential), and a
-     * matching password writes nothing. Never logs or audits the password or the hash.
+     * matching password writes nothing. Because IPasswordHasher.Verify returns false (never throws) on a
+     * malformed/corrupt stored hash, such a hash is treated as "changed" and is safely re-hashed to the
+     * authoritative provisioned plaintext. Never logs or audits the password or the hash.
      */
     public async RotatePasswordIfChanged(tenant: Tenant, principalId: string, password: PresentedSecret): Promise<boolean>
     {
-        const ref = tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
+        const ref = LocalAccountRegistrar.RefFor(tenant, principalId);
         const stored = await this.secrets.Get(ref);
         if (stored === null)
         {
@@ -59,5 +61,10 @@ export class LocalAccountRegistrar
         ]);
         await this.audit.Record(new AuditEvent(AuditEventKind.AdminAction, tenant.Id, principalId, new Date(), detail));
         return true;
+    }
+
+    private static RefFor(tenant: Tenant, principalId: string): string
+    {
+        return tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
     }
 }

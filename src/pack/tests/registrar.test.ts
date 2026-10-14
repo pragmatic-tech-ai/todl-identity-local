@@ -51,10 +51,12 @@ test("RotatePasswordIfChanged rewrites the hash when the password changed", asyn
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, audit);
 
     await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw-old"));
+    const before = await secrets.Get("t1/pwhash/p1");
     const rotated = await registrar.RotatePasswordIfChanged(tenant, "p1", new PresentedSecret("pw-new"));
 
     assert.equal(rotated, true);
     const stored = await secrets.Get("t1/pwhash/p1");
+    assert.notEqual(stored, before);
     assert.ok(stored !== null && await hasher.Verify("pw-new", stored));
     assert.ok(!await hasher.Verify("pw-old", stored));
     // one register + one rotate event, rotate detail carries only a non-secret action token
@@ -96,4 +98,20 @@ test("RotatePasswordIfChanged never mints a credential when none exists", async 
     assert.equal(rotated, false);
     assert.equal(await secrets.Get("t1/pwhash/ghost"), null); // nothing written
     assert.equal(audit.Events.length, 0);
+});
+
+test("RotatePasswordIfChanged re-hashes a corrupt stored hash to the presented password", async () =>
+{
+    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const secrets = new EncryptedSecretStore(randomBytes(32));
+    const hasher = new Argon2PasswordHasher();
+    const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, new InMemoryAuditSink());
+
+    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw-old"));
+    await secrets.Put("t1/pwhash/p1", "not-a-phc-hash");
+    const rotated = await registrar.RotatePasswordIfChanged(tenant, "p1", new PresentedSecret("pw-fixed"));
+
+    assert.equal(rotated, true);
+    const stored = await secrets.Get("t1/pwhash/p1");
+    assert.ok(stored !== null && await hasher.Verify("pw-fixed", stored));
 });
