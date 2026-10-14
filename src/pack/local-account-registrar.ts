@@ -50,11 +50,12 @@ export class LocalAccountRegistrar
         {
             return false;
         }
-        if (await this.hasher.Verify(password.Reveal(), stored))
+        const revealed = password.Reveal();
+        if (await this.hasher.Verify(revealed, stored))
         {
             return false;
         }
-        const hash = await this.hasher.Hash(password.Reveal());
+        const hash = await this.hasher.Hash(revealed);
         await this.secrets.Put(ref, hash);
         const detail = new Map<string, string>([
             [LocalAccountRegistrar.ActionKey, LocalAccountRegistrar.RotateAction]
