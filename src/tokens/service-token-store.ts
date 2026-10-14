@@ -1,5 +1,5 @@
 import { randomBytes, createHash } from "node:crypto";
-import { ServiceTokenGrant } from "@pragmatic-tech-ai/todl-identity";
+import { ServiceTokenGrant, ServiceTokenSummary } from "@pragmatic-tech-ai/todl-identity";
 import type { IServiceTokenStore, Tenant, PresentedSecret } from "@pragmatic-tech-ai/todl-identity";
 
 interface ServiceTokenRecord
@@ -62,6 +62,13 @@ export class ServiceTokenStore implements IServiceTokenStore
         {
             record.revoked = true;
         }
+    }
+
+    public async List(tenant: Tenant): Promise<readonly ServiceTokenSummary[]>
+    {
+        return [...this.records.values()]
+            .filter(record => record.grant.TenantId === tenant.Id)
+            .map(record => new ServiceTokenSummary(record.grant.TokenRef, record.grant.PrincipalId, [...record.grant.Scopes], record.grant.ExpiresAt, record.revoked));
     }
 
     private hash(token: string): string

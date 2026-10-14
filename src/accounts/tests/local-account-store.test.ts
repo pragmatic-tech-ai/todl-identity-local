@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Tenant, TenantKind } from "@pragmatic-tech-ai/todl-identity";
+import { Tenant, TenantKind, LocalAccountNotFoundError } from "@pragmatic-tech-ai/todl-identity";
 import { LocalAccountStore } from "../local-account-store.js";
 
 const t1 = new Tenant("t1", TenantKind.Saas, "Acme");
@@ -65,4 +65,41 @@ test("Lookup returns a User principal for an existing account", async () =>
     const principal = await store.Lookup("p1", t1);
     assert.equal(principal?.Id, "p1");
     assert.equal(principal?.TenantId, "t1");
+});
+
+test("Disable then Lookup returns null, but FindByPrincipalId still returns the record with Disabled=true", async () =>
+{
+    const store = new LocalAccountStore();
+    await store.CreateAccount(t1, "a@x.io", "p1", "r1");
+    await store.Disable(t1, "p1");
+    await store.Disable(t1, "p1");
+    assert.equal(await store.Lookup("p1", t1), null);
+    assert.equal((await store.FindByPrincipalId(t1, "p1"))?.Disabled, true);
+    assert.equal((await store.FindByEmail(t1, "a@x.io"))?.Disabled, true);
+});
+
+test("Disable an unknown principal throws LocalAccountNotFoundError", async () =>
+{
+    const store = new LocalAccountStore();
+    await assert.rejects(() => store.Disable(t1, "ghost"), LocalAccountNotFoundError);
+});
+
+test("ListAccounts returns only the given tenant's accounts", async () =>
+{
+    const store = new LocalAccountStore();
+    await store.CreateAccount(t1, "a@x.io", "p1", "r1");
+    await store.CreateAccount(t1, "b@x.io", "p2", "r2");
+    await store.CreateAccount(t2, "c@x.io", "p3", "r3");
+    assert.deepEqual((await store.ListAccounts(t1)).map(a => a.PrincipalId).sort(), ["p1", "p2"]);
+    assert.deepEqual((await store.ListAccounts(t2)).map(a => a.PrincipalId), ["p3"]);
+});
+
+test("ListAccounts includes a disabled account with Disabled=true", async () =>
+{
+    const store = new LocalAccountStore();
+    await store.CreateAccount(t1, "a@x.io", "p1", "r1");
+    await store.Disable(t1, "p1");
+    const list = await store.ListAccounts(t1);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].Disabled, true);
 });

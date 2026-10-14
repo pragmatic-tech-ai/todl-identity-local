@@ -71,3 +71,32 @@ test("a different tenant cannot revoke another tenant's token by ref", async () 
     await store.Revoke(other, Grant.TokenRef);
     assert.notEqual(await store.Resolve(tenant, new PresentedSecret(Token)), null);
 });
+
+test("List returns only the tenant's tokens", async () =>
+{
+    const store = new ServiceTokenStore();
+    const other = new Tenant("t2", TenantKind.Saas, "Globex");
+    const mine = await store.Issue(tenant, "svc1", ["read:models"], null);
+    await store.Issue(other, "svc2", ["x"], null);
+    const list = await store.List(tenant);
+    assert.equal(list.length, 1);
+    assert.equal(list[0].TokenRef, mine.Grant.TokenRef);
+    assert.equal(list[0].PrincipalId, "svc1");
+    assert.equal(list[0].Revoked, false);
+    assert.equal((await store.List(other)).length, 1);
+});
+
+test("List surfaces Revoked=true after Revoke", async () =>
+{
+    const store = new ServiceTokenStore();
+    const { Grant } = await store.Issue(tenant, "svc1", ["read:models"], null);
+    await store.Revoke(tenant, Grant.TokenRef);
+    assert.equal((await store.List(tenant))[0].Revoked, true);
+});
+
+test("List never exposes the raw token", async () =>
+{
+    const store = new ServiceTokenStore();
+    const { Token } = await store.Issue(tenant, "svc1", ["read:models"], null);
+    assert.ok(!JSON.stringify(await store.List(tenant)).includes(Token));
+});

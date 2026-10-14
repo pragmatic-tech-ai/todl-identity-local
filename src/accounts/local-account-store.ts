@@ -1,4 +1,4 @@
-import { LocalAccount, Principal, PrincipalKind } from "@pragmatic-tech-ai/todl-identity";
+import { LocalAccount, LocalAccountNotFoundError, Principal, PrincipalKind } from "@pragmatic-tech-ai/todl-identity";
 import type { ILocalAccountStore, IPrincipalDirectory, Tenant } from "@pragmatic-tech-ai/todl-identity";
 
 export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirectory
@@ -28,7 +28,7 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         {
             throw new Error(LocalAccountStore.DuplicatePrincipalMessage);
         }
-        const account = new LocalAccount(principalId, tenant.Id, email, secretRef);
+        const account = new LocalAccount(principalId, tenant.Id, email, secretRef, false);
         this.byEmail.set(emailKey, account);
         this.byPrincipal.set(principalKey, account);
         return account;
@@ -47,11 +47,30 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
     public async Lookup(principalId: string, tenant: Tenant): Promise<Principal | null>
     {
         const key = LocalAccountStore.Key(tenant.Id, principalId);
-        if (!this.byPrincipal.has(key))
+        const account = this.byPrincipal.get(key);
+        if (account === undefined || account.Disabled)
         {
             return null;
         }
         return new Principal(principalId, tenant.Id, PrincipalKind.User, new Map(), this.groups.get(key) ?? []);
+    }
+
+    public async Disable(tenant: Tenant, principalId: string): Promise<void>
+    {
+        const principalKey = LocalAccountStore.Key(tenant.Id, principalId);
+        const existing = this.byPrincipal.get(principalKey);
+        if (existing === undefined)
+        {
+            throw new LocalAccountNotFoundError(principalId);
+        }
+        const disabled = new LocalAccount(existing.PrincipalId, existing.TenantId, existing.Email, existing.SecretRef, true);
+        this.byPrincipal.set(principalKey, disabled);
+        this.byEmail.set(LocalAccountStore.Key(tenant.Id, existing.Email), disabled);
+    }
+
+    public async ListAccounts(tenant: Tenant): Promise<readonly LocalAccount[]>
+    {
+        return [...this.byPrincipal.values()].filter(account => account.TenantId === tenant.Id);
     }
 
     public async GroupsOf(principal: Principal): Promise<readonly string[]>
