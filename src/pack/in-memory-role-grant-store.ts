@@ -1,4 +1,4 @@
-import type { IRoleGrantStore, Grant, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import type { IRoleGrantStore, Grant, ResourceRef, Tenant } from "@pragmatic-tech-ai/todl-identity";
 
 export class InMemoryRoleGrantStore implements IRoleGrantStore
 {
@@ -7,6 +7,11 @@ export class InMemoryRoleGrantStore implements IRoleGrantStore
     public async GrantsFor(subject: string, _tenant: Tenant): Promise<readonly Grant[]>
     {
         return this.grants.filter(grant => grant.Subject === subject);
+    }
+
+    public async GrantsOn(resource: ResourceRef): Promise<readonly Grant[]>
+    {
+        return this.grants.filter(grant => InMemoryRoleGrantStore.SameResource(grant.Resource, resource));
     }
 
     public async Save(grant: Grant): Promise<void>
@@ -23,6 +28,11 @@ export class InMemoryRoleGrantStore implements IRoleGrantStore
 
     private static Matches(a: Grant, b: Grant): boolean
     {
-        return a.Subject === b.Subject && a.Role === b.Role && a.Resource.Kind === b.Resource.Kind && a.Resource.TenantId === b.Resource.TenantId && a.Resource.Path.length === b.Resource.Path.length && a.Resource.Path.every((p, i) => p === b.Resource.Path[i]);
+        return a.Subject === b.Subject && a.Role === b.Role && InMemoryRoleGrantStore.SameResource(a.Resource, b.Resource);
+    }
+
+    private static SameResource(a: ResourceRef, b: ResourceRef): boolean
+    {
+        return a.Kind === b.Kind && a.TenantId === b.TenantId && a.Path.length === b.Path.length && a.Path.every((p, i) => p === b.Path[i]);
     }
 }

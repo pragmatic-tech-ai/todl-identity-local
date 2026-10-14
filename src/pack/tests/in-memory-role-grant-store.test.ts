@@ -42,3 +42,16 @@ test("Revoke is a no-op when nothing matches", async () =>
     await store.Revoke(Fixture.Grant("u2", Role.Editor, ["a"]));
     assert.equal((await store.GrantsFor("u1", Fixture.Tenant)).length, 1);
 });
+
+test("GrantsOn returns only exact-resource grants for the queried tenant", async () =>
+{
+    const store = new InMemoryRoleGrantStore();
+    const root1 = new ResourceRef(ResourceKind.Tenant, "t1", []);
+    const root2 = new ResourceRef(ResourceKind.Tenant, "t2", []);
+    await store.Save(new Grant("u1", Role.Owner, root1));
+    await store.Save(new Grant("u2", Role.Admin, root1));
+    await store.Save(new Grant("u3", Role.Owner, root2));
+    await store.Save(Fixture.Grant("u4", Role.Editor, ["a"]));
+    const grants = await store.GrantsOn(root1);
+    assert.deepEqual(grants.map(g => g.Subject).sort(), ["u1", "u2"]);
+});
