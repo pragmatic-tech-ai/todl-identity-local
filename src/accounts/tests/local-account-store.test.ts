@@ -103,3 +103,20 @@ test("ListAccounts includes a disabled account with Disabled=true", async () =>
     assert.equal(list.length, 1);
     assert.equal(list[0].Disabled, true);
 });
+
+test("Enable re-enables a disabled account: Lookup works and Disabled=false", async () =>
+{
+    const store = new LocalAccountStore();
+    await store.CreateAccount(t1, "a@x.io", "p1", "r1");
+    await store.Disable(t1, "p1");
+    await store.Enable(t1, "p1");
+    assert.equal((await store.Lookup("p1", t1))?.Id, "p1");
+    assert.equal((await store.FindByPrincipalId(t1, "p1"))?.Disabled, false);
+    assert.equal((await store.FindByEmail(t1, "a@x.io"))?.Disabled, false);
+});
+
+test("Enable an unknown principal throws LocalAccountNotFoundError", async () =>
+{
+    const store = new LocalAccountStore();
+    await assert.rejects(() => store.Enable(t1, "ghost"), LocalAccountNotFoundError);
+});

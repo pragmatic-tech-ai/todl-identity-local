@@ -56,6 +56,17 @@ export class LocalSessionManager implements ISessionManager
         this.sessions.delete(this.hash(sessionId));
     }
 
+    public async RevokeAllFor(principalId: string): Promise<void>
+    {
+        for (const [key, session] of [...this.sessions])
+        {
+            if (session.PrincipalId === principalId)
+            {
+                this.sessions.delete(key);
+            }
+        }
+    }
+
     private hash(token: string): string
     {
         return createHash(LocalSessionManager.HashAlgorithm).update(token).digest(LocalSessionManager.HashEncoding);

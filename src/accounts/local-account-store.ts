@@ -68,6 +68,19 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         this.byEmail.set(LocalAccountStore.Key(tenant.Id, existing.Email), disabled);
     }
 
+    public async Enable(tenant: Tenant, principalId: string): Promise<void>
+    {
+        const principalKey = LocalAccountStore.Key(tenant.Id, principalId);
+        const existing = this.byPrincipal.get(principalKey);
+        if (existing === undefined)
+        {
+            throw new LocalAccountNotFoundError(principalId);
+        }
+        const enabled = new LocalAccount(existing.PrincipalId, existing.TenantId, existing.Email, existing.SecretRef, false);
+        this.byPrincipal.set(principalKey, enabled);
+        this.byEmail.set(LocalAccountStore.Key(tenant.Id, existing.Email), enabled);
+    }
+
     public async ListAccounts(tenant: Tenant): Promise<readonly LocalAccount[]>
     {
         return [...this.byPrincipal.values()].filter(account => account.TenantId === tenant.Id);

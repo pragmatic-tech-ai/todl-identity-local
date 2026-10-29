@@ -44,3 +44,16 @@ test("the raw token is not stored as a key", async () =>
     assert.ok(session.Id.length >= 40);
     assert.ok(await sessions.Validate(session.Id) !== null);
 });
+
+test("RevokeAllFor revokes every session of that principal and leaves others", async () =>
+{
+    const sessions = new LocalSessionManager();
+    const other = new Principal("p2", "t1", PrincipalKind.User, new Map(), []);
+    const a1 = await sessions.Issue(principal);
+    const a2 = await sessions.Issue(principal);
+    const b = await sessions.Issue(other);
+    await sessions.RevokeAllFor("p1");
+    assert.equal(await sessions.Validate(a1.Id), null);
+    assert.equal(await sessions.Validate(a2.Id), null);
+    assert.equal((await sessions.Validate(b.Id))?.PrincipalId, "p2");
+});
