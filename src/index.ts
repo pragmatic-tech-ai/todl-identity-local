@@ -9,6 +9,8 @@ export { LocalSessionManager } from "./sessions/local-session-manager.js";
 export { ServiceTokenStore } from "./tokens/service-token-store.js";
 export { ServiceTokenAuthenticator } from "./tokens/service-token-authenticator.js";
 export { LocalPasswordAuthenticator } from "./authn/local-password-authenticator.js";
+export { LocalDirectorySource } from "./directory/local-directory-source.js";
+export { LocalSourceTokenProvider } from "./tokens/local-source-token-provider.js";
 export { InMemoryRoleGrantStore } from "./pack/in-memory-role-grant-store.js";
 export { InMemoryAuditSink } from "./pack/in-memory-audit-sink.js";
 export { LocalAccountRegistrar } from "./pack/local-account-registrar.js";

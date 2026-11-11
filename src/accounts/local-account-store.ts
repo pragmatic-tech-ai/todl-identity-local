@@ -1,16 +1,17 @@
-import { LocalAccount, LocalAccountNotFoundError, Principal, PrincipalKind } from "@pragmatic-tech-ai/todl-identity";
-import type { ILocalAccountStore, IPrincipalDirectory, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import { LocalAccount, LocalAccountNotFoundError, LocalGroup, LocalGroupNotFoundError, Principal, PrincipalKind } from "@pragmatic-tech-ai/todl-identity";
+import type { ILocalAccountStore, ILocalGroupStore, IPrincipalDirectory, Tenant } from "@pragmatic-tech-ai/todl-identity";
 
-export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirectory
+export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirectory, ILocalGroupStore
 {
     private static readonly DuplicateEmailMessage = "email already registered";
     private static readonly DuplicatePrincipalMessage = "principal already registered";
     private static readonly InvalidKeyComponentMessage = "tenant id and principal id must not contain the key separator";
+    private static readonly DuplicateGroupMessage = "group already exists";
     private static readonly KeySeparator = "/";
 
     private readonly byEmail = new Map<string, LocalAccount>();
     private readonly byPrincipal = new Map<string, LocalAccount>();
-    private readonly groups = new Map<string, readonly string[]>();
+    private readonly groups = new Map<string, LocalGroup>();
 
     public async CreateAccount(tenant: Tenant, email: string, principalId: string, secretRef: string): Promise<LocalAccount>
     {
@@ -52,7 +53,7 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         {
             return null;
         }
-        return new Principal(principalId, tenant.Id, PrincipalKind.User, new Map(), this.groups.get(key) ?? []);
+        return new Principal(principalId, tenant.Id, PrincipalKind.User, new Map(), this.GroupIdsOf(tenant.Id, principalId));
     }
 
     public async Disable(tenant: Tenant, principalId: string): Promise<void>
@@ -92,7 +93,62 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         {
             return principal.Groups;
         }
-        return this.groups.get(LocalAccountStore.Key(principal.TenantId, principal.Id)) ?? [];
+        return this.GroupIdsOf(principal.TenantId, principal.Id);
+    }
+
+    public async CreateGroup(tenant: Tenant, groupId: string, name: string): Promise<LocalGroup>
+    {
+        const key = LocalAccountStore.Key(tenant.Id, groupId);
+        if (this.groups.has(key))
+        {
+            throw new Error(LocalAccountStore.DuplicateGroupMessage);
+        }
+        const group = new LocalGroup(groupId, tenant.Id, name, []);
+        this.groups.set(key, group);
+        return group;
+    }
+
+    public async DeleteGroup(tenant: Tenant, groupId: string): Promise<void>
+    {
+        this.groups.delete(LocalAccountStore.Key(tenant.Id, groupId));
+    }
+
+    public async AddMember(tenant: Tenant, groupId: string, principalId: string): Promise<void>
+    {
+        const group = this.RequireGroup(tenant, groupId);
+        if (group.MemberIds.includes(principalId))
+        {
+            return;
+        }
+        this.groups.set(LocalAccountStore.Key(tenant.Id, groupId), new LocalGroup(group.GroupId, group.TenantId, group.Name, [...group.MemberIds, principalId]));
+    }
+
+    public async RemoveMember(tenant: Tenant, groupId: string, principalId: string): Promise<void>
+    {
+        const group = this.RequireGroup(tenant, groupId);
+        this.groups.set(LocalAccountStore.Key(tenant.Id, groupId), new LocalGroup(group.GroupId, group.TenantId, group.Name, group.MemberIds.filter(id => id !== principalId)));
+    }
+
+    public async ListGroups(tenant: Tenant): Promise<readonly LocalGroup[]>
+    {
+        return [...this.groups.values()].filter(group => group.TenantId === tenant.Id);
+    }
+
+    private RequireGroup(tenant: Tenant, groupId: string): LocalGroup
+    {
+        const group = this.groups.get(LocalAccountStore.Key(tenant.Id, groupId));
+        if (group === undefined)
+        {
+            throw new LocalGroupNotFoundError(groupId);
+        }
+        return group;
+    }
+
+    private GroupIdsOf(tenantId: string, principalId: string): readonly string[]
+    {
+        return [...this.groups.values()]
+            .filter(group => group.TenantId === tenantId && group.MemberIds.includes(principalId))
+            .map(group => group.GroupId);
     }
 
     private static Key(tenantId: string, id: string): string

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { DelegationDepth, ResourceAuthorizationPolicy } from "@pragmatic-tech-ai/todl-identity";
-import type { AuthMethod, IAccessPolicy, IAuthenticator, IIdentityProviderPack, IPrincipalDirectory, ISessionManager } from "@pragmatic-tech-ai/todl-identity";
+import type { AuthMethod, IAccessPolicy, IAuthenticator, IIdentityProviderPack, IIdpDirectorySource, ILocalGroupStore, IPrincipalDirectory, ISessionManager, ISourceTokenProvider } from "@pragmatic-tech-ai/todl-identity";
 import { Argon2PasswordHasher } from "../hashing/argon2-password-hasher.js";
 import { EncryptedSecretStore } from "../secrets/encrypted-secret-store.js";
 import { LocalAccountStore } from "../accounts/local-account-store.js";
@@ -8,6 +8,8 @@ import { LocalSessionManager } from "../sessions/local-session-manager.js";
 import { ServiceTokenStore } from "../tokens/service-token-store.js";
 import { ServiceTokenAuthenticator } from "../tokens/service-token-authenticator.js";
 import { LocalPasswordAuthenticator } from "../authn/local-password-authenticator.js";
+import { LocalDirectorySource } from "../directory/local-directory-source.js";
+import { LocalSourceTokenProvider } from "../tokens/local-source-token-provider.js";
 import { InMemoryAuditSink } from "./in-memory-audit-sink.js";
 import { InMemoryRoleGrantStore } from "./in-memory-role-grant-store.js";
 import { LocalAccountRegistrar } from "./local-account-registrar.js";
@@ -20,6 +22,9 @@ export class LocalIdentityProviderPack implements IIdentityProviderPack
     public readonly Policy: IAccessPolicy = new ResourceAuthorizationPolicy();
     public readonly Authenticators: readonly IAuthenticator[];
     public readonly Directory: IPrincipalDirectory;
+    public readonly Groups: ILocalGroupStore;
+    public readonly DirectorySource: IIdpDirectorySource;
+    public readonly SourceTokens: ISourceTokenProvider;
     public readonly Sessions: ISessionManager;
     public readonly Grants: InMemoryRoleGrantStore;
     public readonly Audit: InMemoryAuditSink;
@@ -36,6 +41,9 @@ export class LocalIdentityProviderPack implements IIdentityProviderPack
         this.Audit = new InMemoryAuditSink();
         this.Grants = new InMemoryRoleGrantStore();
         this.Directory = accounts;
+        this.Groups = accounts;
+        this.DirectorySource = new LocalDirectorySource(accounts, accounts);
+        this.SourceTokens = new LocalSourceTokenProvider(accounts, secrets);
         this.Registrar = new LocalAccountRegistrar(accounts, secrets, hasher, this.Audit);
         this.Authenticators = [new LocalPasswordAuthenticator(accounts, secrets, hasher), new ServiceTokenAuthenticator(this.Tokens)];
     }
