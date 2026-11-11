@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { PresentedSecret, SourceToken, SourceTokenError, SourceTokenFailure, SystemPrincipal } from "@pragmatic-tech-ai/todl-identity";
-import type { ILocalAccountStore, ISecretStore, ISourceTokenProvider, SourceTokenRequest, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import { PresentedSecret, SourceToken, Tenant, TenantKind, SourceTokenError, SourceTokenFailure, SystemPrincipal } from "@pragmatic-tech-ai/todl-identity";
+import type { ILocalAccountStore, ISecretStore, ISourceTokenProvider, SourceTokenRequest } from "@pragmatic-tech-ai/todl-identity";
 
 /** Issues short-lived per-user HS256 source tokens signed with a per-tenant key held in the secret store. */
 export class LocalSourceTokenProvider implements ISourceTokenProvider
@@ -25,6 +25,8 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
     private static readonly MillisPerSecond = 1000;
     private static readonly PartCount = 3;
 
+    private readonly keys = new Map<string, Promise<Buffer>>();
+
     public constructor(
         private readonly accounts: ILocalAccountStore,
         private readonly secrets: ISecretStore,
@@ -38,7 +40,7 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
         {
             throw new SourceTokenError(SourceTokenFailure.UnsupportedPrincipal);
         }
-        const tenant = { Id: request.TenantId } as Tenant;
+        const tenant = LocalSourceTokenProvider.TenantFor(request.TenantId);
         const account = await this.accounts.FindByPrincipalId(tenant, request.PrincipalId);
         if (account === null || account.Disabled)
         {
@@ -55,7 +57,7 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
             [LocalSourceTokenProvider.ExpClaim]: expiresAt,
         };
         const signingInput = LocalSourceTokenProvider.Encode(header) + LocalSourceTokenProvider.PartSeparator + LocalSourceTokenProvider.Encode(claims);
-        const key = await this.CreateOrLoadKey(request.TenantId);
+        const key = await this.KeyForTenant(request.TenantId);
         const signature = LocalSourceTokenProvider.Sign(key, signingInput);
         return new SourceToken(
             request.Resource,
@@ -106,6 +108,25 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
             return null;
         }
         return sub;
+    }
+
+    /** Memoises in-flight key creation so concurrent first use shares one key; failures are not cached. */
+    private KeyForTenant(tenantId: string): Promise<Buffer>
+    {
+        let pending = this.keys.get(tenantId);
+        if (pending === undefined)
+        {
+            pending = this.CreateOrLoadKey(tenantId);
+            this.keys.set(tenantId, pending);
+            pending.catch(() => this.keys.delete(tenantId));
+        }
+        return pending;
+    }
+
+    /** The account store reads only Tenant.Id; Kind and DisplayName are placeholders. */
+    private static TenantFor(tenantId: string): Tenant
+    {
+        return new Tenant(tenantId, TenantKind.Saas, tenantId);
     }
 
     private async CreateOrLoadKey(tenantId: string): Promise<Buffer>

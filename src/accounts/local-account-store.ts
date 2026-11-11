@@ -11,7 +11,7 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
 
     private readonly byEmail = new Map<string, LocalAccount>();
     private readonly byPrincipal = new Map<string, LocalAccount>();
-    private readonly groups = new Map<string, LocalGroup>();
+    private readonly groups = new Map<string, Map<string, LocalGroup>>();
 
     public async CreateAccount(tenant: Tenant, email: string, principalId: string, secretRef: string): Promise<LocalAccount>
     {
@@ -98,19 +98,20 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
 
     public async CreateGroup(tenant: Tenant, groupId: string, name: string): Promise<LocalGroup>
     {
-        const key = LocalAccountStore.Key(tenant.Id, groupId);
-        if (this.groups.has(key))
+        const tenantGroups = this.GroupsFor(tenant.Id, true) as Map<string, LocalGroup>;
+        if (tenantGroups.has(groupId))
         {
             throw new Error(LocalAccountStore.DuplicateGroupMessage);
         }
         const group = new LocalGroup(groupId, tenant.Id, name, []);
-        this.groups.set(key, group);
+        tenantGroups.set(groupId, group);
         return group;
     }
 
     public async DeleteGroup(tenant: Tenant, groupId: string): Promise<void>
     {
-        this.groups.delete(LocalAccountStore.Key(tenant.Id, groupId));
+        this.RequireGroup(tenant, groupId);
+        this.GroupsFor(tenant.Id, false)?.delete(groupId);
     }
 
     public async AddMember(tenant: Tenant, groupId: string, principalId: string): Promise<void>
@@ -120,23 +121,23 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         {
             return;
         }
-        this.groups.set(LocalAccountStore.Key(tenant.Id, groupId), new LocalGroup(group.GroupId, group.TenantId, group.Name, [...group.MemberIds, principalId]));
+        this.GroupsFor(tenant.Id, false)?.set(groupId, new LocalGroup(group.GroupId, group.TenantId, group.Name, [...group.MemberIds, principalId]));
     }
 
     public async RemoveMember(tenant: Tenant, groupId: string, principalId: string): Promise<void>
     {
         const group = this.RequireGroup(tenant, groupId);
-        this.groups.set(LocalAccountStore.Key(tenant.Id, groupId), new LocalGroup(group.GroupId, group.TenantId, group.Name, group.MemberIds.filter(id => id !== principalId)));
+        this.GroupsFor(tenant.Id, false)?.set(groupId, new LocalGroup(group.GroupId, group.TenantId, group.Name, group.MemberIds.filter(id => id !== principalId)));
     }
 
     public async ListGroups(tenant: Tenant): Promise<readonly LocalGroup[]>
     {
-        return [...this.groups.values()].filter(group => group.TenantId === tenant.Id);
+        return [...(this.GroupsFor(tenant.Id, false)?.values() ?? [])];
     }
 
     private RequireGroup(tenant: Tenant, groupId: string): LocalGroup
     {
-        const group = this.groups.get(LocalAccountStore.Key(tenant.Id, groupId));
+        const group = this.GroupsFor(tenant.Id, false)?.get(groupId);
         if (group === undefined)
         {
             throw new LocalGroupNotFoundError(groupId);
@@ -144,10 +145,21 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         return group;
     }
 
+    private GroupsFor(tenantId: string, create: boolean): Map<string, LocalGroup> | undefined
+    {
+        let tenantGroups = this.groups.get(tenantId);
+        if (tenantGroups === undefined && create)
+        {
+            tenantGroups = new Map<string, LocalGroup>();
+            this.groups.set(tenantId, tenantGroups);
+        }
+        return tenantGroups;
+    }
+
     private GroupIdsOf(tenantId: string, principalId: string): readonly string[]
     {
-        return [...this.groups.values()]
-            .filter(group => group.TenantId === tenantId && group.MemberIds.includes(principalId))
+        return [...(this.groups.get(tenantId)?.values() ?? [])]
+            .filter(group => group.MemberIds.includes(principalId))
             .map(group => group.GroupId);
     }
 
