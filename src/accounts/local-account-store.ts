@@ -1,4 +1,4 @@
-import { LocalAccount, LocalAccountNotFoundError, LocalGroup, LocalGroupNotFoundError, Principal, PrincipalKind } from "@pragmatic-tech-ai/todl-identity";
+import { LocalAccount, LocalAccountNotFoundError, LocalGroup, LocalGroupNotFoundError, Principal, PrincipalKind, SystemPrincipal } from "@pragmatic-tech-ai/todl-identity";
 import type { ILocalAccountStore, ILocalGroupStore, IPrincipalDirectory, Tenant } from "@pragmatic-tech-ai/todl-identity";
 
 export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirectory, ILocalGroupStore
@@ -7,6 +7,7 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
     private static readonly DuplicatePrincipalMessage = "principal already registered";
     private static readonly InvalidKeyComponentMessage = "tenant id and principal id must not contain the key separator";
     private static readonly DuplicateGroupMessage = "group already exists";
+    private static readonly ReservedPrincipalMessage = "principal id uses the reserved system prefix";
     private static readonly KeySeparator = "/";
 
     private readonly byEmail = new Map<string, LocalAccount>();
@@ -18,6 +19,10 @@ export class LocalAccountStore implements ILocalAccountStore, IPrincipalDirector
         if (tenant.Id.includes(LocalAccountStore.KeySeparator) || principalId.includes(LocalAccountStore.KeySeparator))
         {
             throw new Error(LocalAccountStore.InvalidKeyComponentMessage);
+        }
+        if (SystemPrincipal.IsReserved(principalId))
+        {
+            throw new Error(LocalAccountStore.ReservedPrincipalMessage);
         }
         const emailKey = LocalAccountStore.Key(tenant.Id, email);
         const principalKey = LocalAccountStore.Key(tenant.Id, principalId);

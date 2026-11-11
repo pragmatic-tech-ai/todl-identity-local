@@ -18,22 +18,33 @@ export class LocalDirectorySource implements IIdpDirectorySource
         const users = new Map<string, IdpUserState>();
         for (const principalId of request.PrincipalIds)
         {
-            const account = await this.accounts.FindByPrincipalId(tenant, principalId);
-            if (account === null)
-            {
-                users.set(principalId, IdpUserState.Deleted);
-            }
-            else
-            {
-                users.set(principalId, account.Disabled ? IdpUserState.Disabled : IdpUserState.Enabled);
-            }
+            users.set(principalId, await this.StateOf(tenant, principalId));
         }
         const records = await this.groups.ListGroups(tenant);
         const members = new Map<string, readonly string[]>();
         for (const groupId of request.GroupIds)
         {
-            members.set(groupId, records.find(group => group.GroupId === groupId)?.MemberIds ?? []);
+            const memberIds = records.find(group => group.GroupId === groupId)?.MemberIds ?? [];
+            members.set(groupId, memberIds);
+            // A member reached only through a linked group still needs a state, or it would read Unknown (active).
+            for (const memberId of memberIds)
+            {
+                if (!users.has(memberId))
+                {
+                    users.set(memberId, await this.StateOf(tenant, memberId));
+                }
+            }
         }
         return new IdpDirectorySnapshot(this.now(), this.Authoritative, users, members);
+    }
+
+    private async StateOf(tenant: Tenant, principalId: string): Promise<IdpUserState>
+    {
+        const account = await this.accounts.FindByPrincipalId(tenant, principalId);
+        if (account === null)
+        {
+            return IdpUserState.Deleted;
+        }
+        return account.Disabled ? IdpUserState.Disabled : IdpUserState.Enabled;
     }
 }

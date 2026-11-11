@@ -36,7 +36,7 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
 
     public async Acquire(request: SourceTokenRequest): Promise<SourceToken>
     {
-        if (request.PrincipalId === SystemPrincipal.IdFor(request.TenantId))
+        if (!request.TenantId || SystemPrincipal.IsId(request.PrincipalId, request.TenantId))
         {
             throw new SourceTokenError(SourceTokenFailure.UnsupportedPrincipal);
         }
