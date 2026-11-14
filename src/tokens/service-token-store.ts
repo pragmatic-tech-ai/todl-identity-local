@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { ServiceTokenGrant, ServiceTokenSummary } from "@pragmatic-tech-ai/todl-identity";
-import type { IServiceTokenStore, Tenant, PresentedSecret } from "@pragmatic-tech-ai/todl-identity";
+import type { IServiceTokenStore, Realm, PresentedSecret } from "@pragmatic-tech-ai/todl-identity";
 
 interface ServiceTokenRecord
 {
@@ -11,7 +11,7 @@ interface ServiceTokenRecord
 /**
  * In-memory scoped, revocable service token store. Tokens are opaque 256-bit values; the store
  * is keyed ONLY by sha256(token) and the raw token is returned once at issue. Absent, revoked,
- * expired and wrong-tenant tokens resolve to null (fail-closed).
+ * expired and wrong-realm tokens resolve to null (fail-closed).
  */
 export class ServiceTokenStore implements IServiceTokenStore
 {
@@ -30,20 +30,20 @@ export class ServiceTokenStore implements IServiceTokenStore
         this.now = now;
     }
 
-    public async Issue(tenant: Tenant, principalId: string, scopes: readonly string[], expiresAt: Date | null): Promise<{ Grant: ServiceTokenGrant; Token: string }>
+    public async Issue(realm: Realm, principalId: string, scopes: readonly string[], expiresAt: Date | null): Promise<{ Grant: ServiceTokenGrant; Token: string }>
     {
         const token = randomBytes(ServiceTokenStore.TokenBytes).toString(ServiceTokenStore.TokenEncoding);
         const hash = this.hash(token);
-        const tokenRef = tenant.Id + ServiceTokenStore.RefSegment + hash;
-        const grant = new ServiceTokenGrant(tokenRef, principalId, tenant.Id, [...scopes], expiresAt);
+        const tokenRef = realm.Id + ServiceTokenStore.RefSegment + hash;
+        const grant = new ServiceTokenGrant(tokenRef, principalId, realm.Id, [...scopes], expiresAt);
         this.records.set(hash, { grant, revoked: false });
         return { Grant: grant, Token: token };
     }
 
-    public async Resolve(tenant: Tenant, presented: PresentedSecret): Promise<ServiceTokenGrant | null>
+    public async Resolve(realm: Realm, presented: PresentedSecret): Promise<ServiceTokenGrant | null>
     {
         const record = this.records.get(this.hash(presented.Reveal()));
-        if (record === undefined || record.revoked || record.grant.TenantId !== tenant.Id)
+        if (record === undefined || record.revoked || record.grant.RealmId !== realm.Id)
         {
             return null;
         }
@@ -55,19 +55,19 @@ export class ServiceTokenStore implements IServiceTokenStore
         return record.grant;
     }
 
-    public async Revoke(tenant: Tenant, tokenRef: string): Promise<void>
+    public async Revoke(realm: Realm, tokenRef: string): Promise<void>
     {
         const record = this.records.get(tokenRef.slice(tokenRef.lastIndexOf(ServiceTokenStore.RefSeparator) + 1));
-        if (record !== undefined && record.grant.TokenRef === tokenRef && record.grant.TenantId === tenant.Id)
+        if (record !== undefined && record.grant.TokenRef === tokenRef && record.grant.RealmId === realm.Id)
         {
             record.revoked = true;
         }
     }
 
-    public async List(tenant: Tenant): Promise<readonly ServiceTokenSummary[]>
+    public async List(realm: Realm): Promise<readonly ServiceTokenSummary[]>
     {
         return [...this.records.values()]
-            .filter(record => record.grant.TenantId === tenant.Id)
+            .filter(record => record.grant.RealmId === realm.Id)
             .map(record => new ServiceTokenSummary(record.grant.TokenRef, record.grant.PrincipalId, [...record.grant.Scopes], record.grant.ExpiresAt, record.revoked));
     }
 

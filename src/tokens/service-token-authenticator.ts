@@ -1,5 +1,5 @@
 import { Principal, PrincipalKind, AuthMethod, AuthenticatedResult, RejectedResult } from "@pragmatic-tech-ai/todl-identity";
-import type { IServiceTokenStore, IAuthenticator, Credential, Tenant, PresentedSecret, AuthenticationResult } from "@pragmatic-tech-ai/todl-identity";
+import type { IServiceTokenStore, IAuthenticator, Credential, Realm, PresentedSecret, AuthenticationResult } from "@pragmatic-tech-ai/todl-identity";
 
 /** Authenticates a presented service token; the grant's scopes surface as the principal's Groups. */
 export class ServiceTokenAuthenticator implements IAuthenticator
@@ -14,14 +14,14 @@ export class ServiceTokenAuthenticator implements IAuthenticator
         this.store = store;
     }
 
-    public async Authenticate(_credential: Credential, presented: PresentedSecret, tenant: Tenant): Promise<AuthenticationResult>
+    public async Authenticate(_credential: Credential, presented: PresentedSecret, realm: Realm): Promise<AuthenticationResult>
     {
-        const grant = await this.store.Resolve(tenant, presented);
+        const grant = await this.store.Resolve(realm, presented);
         if (grant === null)
         {
             return new RejectedResult(ServiceTokenAuthenticator.RejectionReason);
         }
-        const principal = new Principal(grant.PrincipalId, grant.TenantId, PrincipalKind.Service, new Map(), [...grant.Scopes]);
+        const principal = new Principal(grant.PrincipalId, grant.RealmId, PrincipalKind.Service, new Map(), [...grant.Scopes]);
         return new AuthenticatedResult(principal);
     }
 }

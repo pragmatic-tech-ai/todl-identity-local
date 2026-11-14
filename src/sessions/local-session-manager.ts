@@ -1,6 +1,6 @@
 import { randomBytes, createHash } from "node:crypto";
 import { Session, AuthMethod } from "@pragmatic-tech-ai/todl-identity";
-import type { ISessionManager, Principal, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import type { ISessionManager, Principal, Realm } from "@pragmatic-tech-ai/todl-identity";
 
 /**
  * In-memory session manager issuing opaque 256-bit bearer tokens. The store is keyed ONLY by
@@ -30,7 +30,7 @@ export class LocalSessionManager implements ISessionManager
         const token = randomBytes(LocalSessionManager.TokenBytes).toString(LocalSessionManager.TokenEncoding);
         const issuedAt = this.now();
         const expiresAt = new Date(issuedAt.getTime() + this.ttlMs);
-        const session = new Session(token, principal.Id, principal.TenantId, issuedAt, expiresAt, AuthMethod.Local);
+        const session = new Session(token, principal.Id, principal.RealmId, issuedAt, expiresAt, AuthMethod.Local);
         this.sessions.set(this.hash(token), session);
         return session;
     }
@@ -56,11 +56,11 @@ export class LocalSessionManager implements ISessionManager
         this.sessions.delete(this.hash(sessionId));
     }
 
-    public async RevokeAllFor(tenant: Tenant, principalId: string): Promise<void>
+    public async RevokeAllFor(realm: Realm, principalId: string): Promise<void>
     {
         for (const [key, session] of [...this.sessions])
         {
-            if (session.PrincipalId === principalId && session.TenantId === tenant.Id)
+            if (session.PrincipalId === principalId && session.RealmId === realm.Id)
             {
                 this.sessions.delete(key);
             }

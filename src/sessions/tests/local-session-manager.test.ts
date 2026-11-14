@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Principal, PrincipalKind, Tenant, TenantKind } from "@pragmatic-tech-ai/todl-identity";
+import { Principal, PrincipalKind, Realm, RealmKind } from "@pragmatic-tech-ai/todl-identity";
 import { LocalSessionManager } from "../local-session-manager.js";
 
 const principal = new Principal("p1", "t1", PrincipalKind.User, new Map(), []);
@@ -11,7 +11,7 @@ test("issue then validate round-trips", async () =>
     const session = await sessions.Issue(principal);
     const validated = await sessions.Validate(session.Id);
     assert.equal(validated?.PrincipalId, "p1");
-    assert.equal(validated?.TenantId, "t1");
+    assert.equal(validated?.RealmId, "t1");
 });
 
 test("validate after revoke returns null", async () =>
@@ -52,10 +52,10 @@ test("RevokeAllFor revokes every session of that principal and leaves others", a
     const a1 = await sessions.Issue(principal);
     const a2 = await sessions.Issue(principal);
     const b = await sessions.Issue(other);
-    const sameIdOtherTenant = await sessions.Issue(new Principal("p1", "t2", PrincipalKind.User, new Map(), []));
-    await sessions.RevokeAllFor(new Tenant("t1", TenantKind.Saas, "Acme"), "p1");
+    const sameIdOtherRealm = await sessions.Issue(new Principal("p1", "t2", PrincipalKind.User, new Map(), []));
+    await sessions.RevokeAllFor(new Realm("t1", RealmKind.Saas, "Acme"), "p1");
     assert.equal(await sessions.Validate(a1.Id), null);
     assert.equal(await sessions.Validate(a2.Id), null);
     assert.equal((await sessions.Validate(b.Id))?.PrincipalId, "p2");
-    assert.equal((await sessions.Validate(sameIdOtherTenant.Id))?.TenantId, "t2");
+    assert.equal((await sessions.Validate(sameIdOtherRealm.Id))?.RealmId, "t2");
 });

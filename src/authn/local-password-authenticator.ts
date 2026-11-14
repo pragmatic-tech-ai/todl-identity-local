@@ -1,5 +1,5 @@
 import { AuthMethod, AuthenticatedResult, RejectedResult } from "@pragmatic-tech-ai/todl-identity";
-import type { IAuthenticator, ILocalAccountStore, IPrincipalDirectory, ISecretStore, IPasswordHasher, Credential, PresentedSecret, Tenant, AuthenticationResult } from "@pragmatic-tech-ai/todl-identity";
+import type { IAuthenticator, ILocalAccountStore, IPrincipalDirectory, ISecretStore, IPasswordHasher, Credential, PresentedSecret, Realm, AuthenticationResult } from "@pragmatic-tech-ai/todl-identity";
 
 /**
  * Email/password authenticator. Fail-closed: every failure path returns the same
@@ -21,9 +21,9 @@ export class LocalPasswordAuthenticator implements IAuthenticator
     {
     }
 
-    public async Authenticate(credential: Credential, presented: PresentedSecret, tenant: Tenant): Promise<AuthenticationResult>
+    public async Authenticate(credential: Credential, presented: PresentedSecret, realm: Realm): Promise<AuthenticationResult>
     {
-        const account = await this.accounts.FindByEmail(tenant, credential.Reference);
+        const account = await this.accounts.FindByEmail(realm, credential.Reference);
         if (account === null)
         {
             return this.RejectAfterDummyVerify(presented);
@@ -38,7 +38,7 @@ export class LocalPasswordAuthenticator implements IAuthenticator
         {
             return this.Reject();
         }
-        const principal = await this.accounts.Lookup(account.PrincipalId, tenant);
+        const principal = await this.accounts.Lookup(account.PrincipalId, realm);
         if (principal === null)
         {
             return this.Reject();

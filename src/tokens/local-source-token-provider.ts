@@ -1,8 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { PresentedSecret, SourceToken, Tenant, TenantKind, SourceTokenError, SourceTokenFailure, SystemPrincipal } from "@pragmatic-tech-ai/todl-identity";
+import { PresentedSecret, SourceToken, Realm, RealmKind, SourceTokenError, SourceTokenFailure, SystemPrincipal } from "@pragmatic-tech-ai/todl-identity";
 import type { ILocalAccountStore, ISecretStore, ISourceTokenProvider, SourceTokenRequest } from "@pragmatic-tech-ai/todl-identity";
 
-/** Issues short-lived per-user HS256 source tokens signed with a per-tenant key held in the secret store. */
+/** Issues short-lived per-user HS256 source tokens signed with a per-realm key held in the secret store. */
 export class LocalSourceTokenProvider implements ISourceTokenProvider
 {
     private static readonly Issuer = "todl-identity-local";
@@ -36,12 +36,12 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
 
     public async Acquire(request: SourceTokenRequest): Promise<SourceToken>
     {
-        if (!request.TenantId || SystemPrincipal.IsId(request.PrincipalId, request.TenantId))
+        if (!request.RealmId || SystemPrincipal.IsId(request.PrincipalId, request.RealmId))
         {
             throw new SourceTokenError(SourceTokenFailure.UnsupportedPrincipal);
         }
-        const tenant = LocalSourceTokenProvider.TenantFor(request.TenantId);
-        const account = await this.accounts.FindByPrincipalId(tenant, request.PrincipalId);
+        const realm = LocalSourceTokenProvider.RealmFor(request.RealmId);
+        const account = await this.accounts.FindByPrincipalId(realm, request.PrincipalId);
         if (account === null || account.Disabled)
         {
             throw new SourceTokenError(SourceTokenFailure.PrincipalInactive);
@@ -57,7 +57,7 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
             [LocalSourceTokenProvider.ExpClaim]: expiresAt,
         };
         const signingInput = LocalSourceTokenProvider.Encode(header) + LocalSourceTokenProvider.PartSeparator + LocalSourceTokenProvider.Encode(claims);
-        const key = await this.KeyForTenant(request.TenantId);
+        const key = await this.KeyForRealm(request.RealmId);
         const signature = LocalSourceTokenProvider.Sign(key, signingInput);
         return new SourceToken(
             request.Resource,
@@ -66,14 +66,14 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
     }
 
     /** Returns the subject when signature, audience, issuer and expiry all hold; otherwise null. */
-    public async Verify(tenantId: string, token: string, resource: string): Promise<string | null>
+    public async Verify(realmId: string, token: string, resource: string): Promise<string | null>
     {
         const parts = token.split(LocalSourceTokenProvider.PartSeparator);
         if (parts.length !== LocalSourceTokenProvider.PartCount)
         {
             return null;
         }
-        const stored = await this.secrets.Get(LocalSourceTokenProvider.KeyPrefix + tenantId);
+        const stored = await this.secrets.Get(LocalSourceTokenProvider.KeyPrefix + realmId);
         if (stored === null)
         {
             return null;
@@ -111,27 +111,27 @@ export class LocalSourceTokenProvider implements ISourceTokenProvider
     }
 
     /** Memoises in-flight key creation so concurrent first use shares one key; failures are not cached. */
-    private KeyForTenant(tenantId: string): Promise<Buffer>
+    private KeyForRealm(realmId: string): Promise<Buffer>
     {
-        let pending = this.keys.get(tenantId);
+        let pending = this.keys.get(realmId);
         if (pending === undefined)
         {
-            pending = this.CreateOrLoadKey(tenantId);
-            this.keys.set(tenantId, pending);
-            pending.catch(() => this.keys.delete(tenantId));
+            pending = this.CreateOrLoadKey(realmId);
+            this.keys.set(realmId, pending);
+            pending.catch(() => this.keys.delete(realmId));
         }
         return pending;
     }
 
-    /** The account store reads only Tenant.Id; Kind and DisplayName are placeholders. */
-    private static TenantFor(tenantId: string): Tenant
+    /** The account store reads only Realm.Id; Kind and DisplayName are placeholders. */
+    private static RealmFor(realmId: string): Realm
     {
-        return new Tenant(tenantId, TenantKind.Saas, tenantId);
+        return new Realm(realmId, RealmKind.Saas, realmId);
     }
 
-    private async CreateOrLoadKey(tenantId: string): Promise<Buffer>
+    private async CreateOrLoadKey(realmId: string): Promise<Buffer>
     {
-        const reference = LocalSourceTokenProvider.KeyPrefix + tenantId;
+        const reference = LocalSourceTokenProvider.KeyPrefix + realmId;
         const existing = await this.secrets.Get(reference);
         if (existing !== null)
         {

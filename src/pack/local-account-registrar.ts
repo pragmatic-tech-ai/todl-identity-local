@@ -1,5 +1,5 @@
 import { AuditEvent, AuditEventKind } from "@pragmatic-tech-ai/todl-identity";
-import type { IAuditSink, ILocalAccountStore, IPasswordHasher, ISecretStore, LocalAccount, PresentedSecret, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import type { IAuditSink, ILocalAccountStore, IPasswordHasher, ISecretStore, LocalAccount, PresentedSecret, Realm } from "@pragmatic-tech-ai/todl-identity";
 
 /** Registers a local account: hashes the password, stores the hash by reference, records a non-secret audit event. */
 export class LocalAccountRegistrar
@@ -18,19 +18,19 @@ export class LocalAccountRegistrar
     {
     }
 
-    public async Register(tenant: Tenant, email: string, principalId: string, password: PresentedSecret): Promise<LocalAccount>
+    public async Register(realm: Realm, email: string, principalId: string, password: PresentedSecret): Promise<LocalAccount>
     {
         const hash = await this.hasher.Hash(password.Reveal());
-        const ref = LocalAccountRegistrar.RefFor(tenant, principalId);
+        const ref = LocalAccountRegistrar.RefFor(realm, principalId);
         // Reserve uniqueness first: a duplicate email/principal throws here, before any secret write,
         // so an existing account's stored hash is never overwritten or deleted.
-        const account = await this.accounts.CreateAccount(tenant, email, principalId, ref);
+        const account = await this.accounts.CreateAccount(realm, email, principalId, ref);
         await this.secrets.Put(ref, hash);
         const detail = new Map<string, string>([
             [LocalAccountRegistrar.ActionKey, LocalAccountRegistrar.RegisterAction],
             [LocalAccountRegistrar.EmailKey, email]
         ]);
-        await this.audit.Record(new AuditEvent(AuditEventKind.AdminAction, tenant.Id, principalId, new Date(), detail));
+        await this.audit.Record(new AuditEvent(AuditEventKind.AdminAction, realm.Id, principalId, new Date(), detail));
         return account;
     }
 
@@ -42,9 +42,9 @@ export class LocalAccountRegistrar
      * malformed/corrupt stored hash, such a hash is treated as "changed" and is safely re-hashed to the
      * authoritative provisioned plaintext. Never logs or audits the password or the hash.
      */
-    public async RotatePasswordIfChanged(tenant: Tenant, principalId: string, password: PresentedSecret): Promise<boolean>
+    public async RotatePasswordIfChanged(realm: Realm, principalId: string, password: PresentedSecret): Promise<boolean>
     {
-        const ref = LocalAccountRegistrar.RefFor(tenant, principalId);
+        const ref = LocalAccountRegistrar.RefFor(realm, principalId);
         const stored = await this.secrets.Get(ref);
         if (stored === null)
         {
@@ -60,12 +60,12 @@ export class LocalAccountRegistrar
         const detail = new Map<string, string>([
             [LocalAccountRegistrar.ActionKey, LocalAccountRegistrar.RotateAction]
         ]);
-        await this.audit.Record(new AuditEvent(AuditEventKind.AdminAction, tenant.Id, principalId, new Date(), detail));
+        await this.audit.Record(new AuditEvent(AuditEventKind.AdminAction, realm.Id, principalId, new Date(), detail));
         return true;
     }
 
-    private static RefFor(tenant: Tenant, principalId: string): string
+    private static RefFor(realm: Realm, principalId: string): string
     {
-        return tenant.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
+        return realm.Id + LocalAccountRegistrar.SecretRefSegment + principalId;
     }
 }

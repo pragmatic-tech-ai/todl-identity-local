@@ -1,10 +1,10 @@
-import type { IRoleGrantStore, Grant, ResourceRef, Tenant } from "@pragmatic-tech-ai/todl-identity";
+import type { IRoleGrantStore, Grant, ResourceRef, Realm } from "@pragmatic-tech-ai/todl-identity";
 
 export class InMemoryRoleGrantStore implements IRoleGrantStore
 {
     private readonly grants: Grant[] = [];
 
-    public async GrantsFor(subject: string, _tenant: Tenant): Promise<readonly Grant[]>
+    public async GrantsFor(subject: string, _realm: Realm): Promise<readonly Grant[]>
     {
         return this.grants.filter(grant => grant.Subject === subject);
     }
@@ -33,6 +33,6 @@ export class InMemoryRoleGrantStore implements IRoleGrantStore
 
     private static SameResource(a: ResourceRef, b: ResourceRef): boolean
     {
-        return a.Kind === b.Kind && a.TenantId === b.TenantId && a.Path.length === b.Path.length && a.Path.every((p, i) => p === b.Path[i]);
+        return a.Kind === b.Kind && a.RealmId === b.RealmId && a.Path.length === b.Path.length && a.Path.every((p, i) => p === b.Path[i]);
     }
 }

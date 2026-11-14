@@ -1,10 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { Tenant, TenantKind, LocalAccountNotFoundError } from "@pragmatic-tech-ai/todl-identity";
+import { Realm, RealmKind, LocalAccountNotFoundError } from "@pragmatic-tech-ai/todl-identity";
 import { LocalAccountStore } from "../local-account-store.js";
 
-const t1 = new Tenant("t1", TenantKind.Saas, "Acme");
-const t2 = new Tenant("t2", TenantKind.Saas, "Globex");
+const t1 = new Realm("t1", RealmKind.Saas, "Acme");
+const t2 = new Realm("t2", RealmKind.Saas, "Globex");
 
 test("create then find by email and principal id", async () =>
 {
@@ -17,14 +17,14 @@ test("create then find by email and principal id", async () =>
     assert.equal(byId?.Email, "a@x.io");
 });
 
-test("duplicate email in the same tenant throws", async () =>
+test("duplicate email in the same realm throws", async () =>
 {
     const store = new LocalAccountStore();
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");
     await assert.rejects(() => store.CreateAccount(t1, "a@x.io", "p2", "r2"));
 });
 
-test("same email in a different tenant is allowed (tenant isolation)", async () =>
+test("same email in a different realm is allowed (realm isolation)", async () =>
 {
     const store = new LocalAccountStore();
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");
@@ -35,7 +35,7 @@ test("same email in a different tenant is allowed (tenant isolation)", async () 
     assert.equal((await store.FindByEmail(t2, "a@x.io"))?.PrincipalId, "p9");
 });
 
-test("duplicate principal id in the same tenant throws and leaves maps untouched", async () =>
+test("duplicate principal id in the same realm throws and leaves maps untouched", async () =>
 {
     const store = new LocalAccountStore();
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");
@@ -44,10 +44,10 @@ test("duplicate principal id in the same tenant throws and leaves maps untouched
     assert.equal((await store.FindByPrincipalId(t1, "p1"))?.Email, "a@x.io");
 });
 
-test("separator in tenant id or principal id is rejected", async () =>
+test("separator in realm id or principal id is rejected", async () =>
 {
     const store = new LocalAccountStore();
-    await assert.rejects(() => store.CreateAccount(new Tenant("a/b", TenantKind.Saas, "X"), "e@x.io", "c", "r"));
+    await assert.rejects(() => store.CreateAccount(new Realm("a/b", RealmKind.Saas, "X"), "e@x.io", "c", "r"));
     await assert.rejects(() => store.CreateAccount(t1, "e@x.io", "b/c", "r"));
 });
 
@@ -64,7 +64,7 @@ test("Lookup returns a User principal for an existing account", async () =>
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");
     const principal = await store.Lookup("p1", t1);
     assert.equal(principal?.Id, "p1");
-    assert.equal(principal?.TenantId, "t1");
+    assert.equal(principal?.RealmId, "t1");
 });
 
 test("Disable then Lookup returns null, but FindByPrincipalId still returns the record with Disabled=true", async () =>
@@ -84,7 +84,7 @@ test("Disable an unknown principal throws LocalAccountNotFoundError", async () =
     await assert.rejects(() => store.Disable(t1, "ghost"), LocalAccountNotFoundError);
 });
 
-test("ListAccounts returns only the given tenant's accounts", async () =>
+test("ListAccounts returns only the given realm's accounts", async () =>
 {
     const store = new LocalAccountStore();
     await store.CreateAccount(t1, "a@x.io", "p1", "r1");

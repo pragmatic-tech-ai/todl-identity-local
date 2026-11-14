@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
-import { Tenant, TenantKind, PresentedSecret } from "@pragmatic-tech-ai/todl-identity";
+import { Realm, RealmKind, PresentedSecret } from "@pragmatic-tech-ai/todl-identity";
 import { Argon2PasswordHasher } from "../../hashing/argon2-password-hasher.js";
 import { EncryptedSecretStore } from "../../secrets/encrypted-secret-store.js";
 import { LocalAccountStore } from "../../accounts/local-account-store.js";
@@ -10,13 +10,13 @@ import { LocalAccountRegistrar } from "../local-account-registrar.js";
 
 test("a failed registration leaves no orphaned secret and no audit event", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const audit = new InMemoryAuditSink();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, new Argon2PasswordHasher(), audit);
 
-    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw1"));
-    await assert.rejects(registrar.Register(tenant, "a@x.io", "p2", new PresentedSecret("pw2")));
+    await registrar.Register(realm, "a@x.io", "p1", new PresentedSecret("pw1"));
+    await assert.rejects(registrar.Register(realm, "a@x.io", "p2", new PresentedSecret("pw2")));
 
     assert.equal(await secrets.Get("t1/pwhash/p2"), null);
     assert.notEqual(await secrets.Get("t1/pwhash/p1"), null);
@@ -25,16 +25,16 @@ test("a failed registration leaves no orphaned secret and no audit event", async
 
 test("re-registering an existing principalId rejects and leaves the victim credential intact", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const hasher = new Argon2PasswordHasher();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, new InMemoryAuditSink());
 
-    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw1"));
+    await registrar.Register(realm, "a@x.io", "p1", new PresentedSecret("pw1"));
     const before = await secrets.Get("t1/pwhash/p1");
     assert.ok(before !== null && await hasher.Verify("pw1", before));
 
-    await assert.rejects(registrar.Register(tenant, "attacker@x.io", "p1", new PresentedSecret("pw2")));
+    await assert.rejects(registrar.Register(realm, "attacker@x.io", "p1", new PresentedSecret("pw2")));
 
     const after = await secrets.Get("t1/pwhash/p1");
     assert.ok(after !== null);
@@ -44,15 +44,15 @@ test("re-registering an existing principalId rejects and leaves the victim crede
 
 test("RotatePasswordIfChanged rewrites the hash when the password changed", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const hasher = new Argon2PasswordHasher();
     const audit = new InMemoryAuditSink();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, audit);
 
-    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw-old"));
+    await registrar.Register(realm, "a@x.io", "p1", new PresentedSecret("pw-old"));
     const before = await secrets.Get("t1/pwhash/p1");
-    const rotated = await registrar.RotatePasswordIfChanged(tenant, "p1", new PresentedSecret("pw-new"));
+    const rotated = await registrar.RotatePasswordIfChanged(realm, "p1", new PresentedSecret("pw-new"));
 
     assert.equal(rotated, true);
     const stored = await secrets.Get("t1/pwhash/p1");
@@ -71,15 +71,15 @@ test("RotatePasswordIfChanged rewrites the hash when the password changed", asyn
 
 test("RotatePasswordIfChanged is a no-op when the password is unchanged", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const hasher = new Argon2PasswordHasher();
     const audit = new InMemoryAuditSink();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, audit);
 
-    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw-same"));
+    await registrar.Register(realm, "a@x.io", "p1", new PresentedSecret("pw-same"));
     const before = await secrets.Get("t1/pwhash/p1");
-    const rotated = await registrar.RotatePasswordIfChanged(tenant, "p1", new PresentedSecret("pw-same"));
+    const rotated = await registrar.RotatePasswordIfChanged(realm, "p1", new PresentedSecret("pw-same"));
 
     assert.equal(rotated, false);
     assert.equal(await secrets.Get("t1/pwhash/p1"), before); // byte-identical: no re-hash write
@@ -88,12 +88,12 @@ test("RotatePasswordIfChanged is a no-op when the password is unchanged", async 
 
 test("RotatePasswordIfChanged never mints a credential when none exists", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const audit = new InMemoryAuditSink();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, new Argon2PasswordHasher(), audit);
 
-    const rotated = await registrar.RotatePasswordIfChanged(tenant, "ghost", new PresentedSecret("pw"));
+    const rotated = await registrar.RotatePasswordIfChanged(realm, "ghost", new PresentedSecret("pw"));
 
     assert.equal(rotated, false);
     assert.equal(await secrets.Get("t1/pwhash/ghost"), null); // nothing written
@@ -102,14 +102,14 @@ test("RotatePasswordIfChanged never mints a credential when none exists", async 
 
 test("RotatePasswordIfChanged re-hashes a corrupt stored hash to the presented password", async () =>
 {
-    const tenant = new Tenant("t1", TenantKind.Saas, "Acme");
+    const realm = new Realm("t1", RealmKind.Saas, "Acme");
     const secrets = new EncryptedSecretStore(randomBytes(32));
     const hasher = new Argon2PasswordHasher();
     const registrar = new LocalAccountRegistrar(new LocalAccountStore(), secrets, hasher, new InMemoryAuditSink());
 
-    await registrar.Register(tenant, "a@x.io", "p1", new PresentedSecret("pw-old"));
+    await registrar.Register(realm, "a@x.io", "p1", new PresentedSecret("pw-old"));
     await secrets.Put("t1/pwhash/p1", "not-a-phc-hash");
-    const rotated = await registrar.RotatePasswordIfChanged(tenant, "p1", new PresentedSecret("pw-fixed"));
+    const rotated = await registrar.RotatePasswordIfChanged(realm, "p1", new PresentedSecret("pw-fixed"));
 
     assert.equal(rotated, true);
     const stored = await secrets.Get("t1/pwhash/p1");
