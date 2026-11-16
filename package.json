@@ -1,6 +1,10 @@
 {
   "name": "@pragmatic-tech-ai/todl-identity-local",
   "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pragmatic-tech-ai/todl-identity-local.git"
+  },
   "license": "Apache-2.0",
   "description": "Built-in local identity pack for todl-identity: argon2id password hashing, AES-256-GCM encrypted secret store, local accounts/sessions, and scoped service tokens.",
   "type": "module",
@@ -35,7 +39,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
-    "@pragmatic-tech-ai/todl-identity": "file:../todl-identity",
+    "@pragmatic-tech-ai/todl-identity": "^0.1.0",
     "hash-wasm": "^4.12.0"
   }
 }
