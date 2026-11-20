@@ -1,3 +1,7 @@
+> Archived 2026-11-20: moved to pragmatic-shared (packages/pragmatic-identity-source-local) as @pragmatic-tech-ai/pragmatic-identity-source-local.
+>
+> The package @pragmatic-tech-ai/todl-identity-local is retired. GitHub Packages does not support npm deprecate, so its published versions carry no deprecation flag; use the new package.
+
 # @pragmatic-tech-ai/todl-identity-local
 
 The built-in **local** identity provider pack implementing the `todl-identity`
